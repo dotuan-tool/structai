@@ -157,6 +157,15 @@ select option{background:var(--s2);}
 
 @media(max-width:640px){.cfg{grid-template-columns:1fr}.sumgrid{grid-template-columns:1fr 1fr}.region-row{grid-template-columns:1fr}}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+.r-cat td{background:rgba(74,222,128,.08);font-weight:700;color:var(--green);border-top:1px solid var(--border)}
+.r-task td{font-weight:600}
+.r-grp td{color:#a8b8a8;font-size:12px}
+.r-det td{color:#90a090;font-size:12px}
+.tbl td.kl{font-family:var(--mono);font-size:12px;color:var(--green);text-align:right}
+.tbl td.money{font-family:var(--mono);font-size:11px;color:var(--yellow);text-align:right}
+</style>
 </head>
 <body>
 
@@ -230,7 +239,7 @@ select option{background:var(--s2);}
       <div class="res-hdr"><div class="res-ttl">📊 KẾT QUẢ BÓC KHỐI LƯỢNG</div><div style="display:flex;gap:8px"><button class="btn-sm" onclick="cpTbl(&#39;tb1&#39;)">📋 Copy</button><button class="btn-sm pri" onclick="exXL(1)">📥 Xuất Excel</button></div></div>
       <div class="sumgrid" id="sg1"></div>
       <div class="costbox" id="cb1"></div>
-      <div class="tblwrap"><table class="tbl"><thead><tr><th>STT</th><th>Hạng mục</th><th>Danh mục</th><th>Thông số KT</th><th>Khối lượng</th><th>ĐV</th><th>Đ.giá VL</th><th>Đ.giá NC</th><th>Thành tiền</th><th>Tin cậy</th></tr></thead><tbody id="tb1"></tbody></table></div>
+      <div class="tblwrap"><table class="tbl"><thead><tr><th>STT</th><th>TÊN CÔNG TÁC</th><th>ĐV</th><th>SL</th><th>D</th><th>R</th><th>C</th><th>HS</th><th>KL</th><th>ĐG VT</th><th>ĐG NC</th><th>THÀNH TIỀN</th></tr></thead><tbody id="tb1"></tbody></table></div>
       <div class="noteslbl">⚠ LƯU Ý &amp; KIẾN NGHỊ</div><div class="notesbox" id="nb1"></div>
     </div>
   </div>
@@ -264,7 +273,7 @@ VD: Nhà xưởng sản xuất khung thép tiền chế, 60x120m, cao 9m, bướ
       <div class="res-hdr"><div class="res-ttl">📊 KẾT QUẢ BÓC KHỐI LƯỢNG &amp; DỰ TOÁN</div><div style="display:flex;gap:8px"><button class="btn-sm" onclick="cpTbl(&#39;tb2&#39;)">📋 Copy</button><button class="btn-sm pri" onclick="exXL(2)">📥 Xuất Excel</button></div></div>
       <div class="sumgrid" id="sg2"></div>
       <div class="costbox" id="cb2"></div>
-      <div class="tblwrap"><table class="tbl" id="t2"><thead><tr><th>STT</th><th>Hạng mục</th><th>Danh mục</th><th>Thông số KT</th><th>Khối lượng</th><th>ĐV</th><th>Đ.giá VL</th><th>Đ.giá NC</th><th>Thành tiền</th><th>Tin cậy</th></tr></thead><tbody id="tb2"></tbody></table></div>
+      <div class="tblwrap"><table class="tbl" id="t2"><thead><tr><th>STT</th><th>TÊN CÔNG TÁC</th><th>ĐV</th><th>SL</th><th>D</th><th>R</th><th>C</th><th>HS</th><th>KL</th><th>ĐG VT</th><th>ĐG NC</th><th>THÀNH TIỀN</th></tr></thead><tbody id="tb2"></tbody></table></div>
       <div class="noteslbl">⚠ LƯU Ý &amp; KIẾN NGHỊ</div><div class="notesbox" id="nb2"></div>
     </div>
   </div>
@@ -403,9 +412,9 @@ function pF(file){uF=file;const ic={'application/pdf':'📄','image/png':'🖼�
 function rmFile(){uF=null;uB=null;uT=null;document.getElementById('fprev').classList.remove('on');document.getElementById('uz').style.display='block';document.getElementById('fi').value='';}
 
 // ── AI ───────────────────────────────────────────────
-async function callAI(sys,content){
-  const r=await fetch('https://bfnitiucjplvikrhquve.supabase.co/functions/v1/claude-proxy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:8000,system:sys,messages:[{role:'user',content}]})});
-  const d=await r.json();if(d.error)throw new Error(d.error.message);
+async function callAI(sys,content,model){
+  const r=await fetch('https://bfnitiucjplvikrhquve.supabase.co/functions/v1/claude-proxy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:model||'claude-haiku-4-5-20251001',max_tokens:16000,system:sys,messages:[{role:'user',content}]})});
+  const d=await r.json();if(d.error)throw new Error(typeof d.error==='string'?d.error:(d.error.message||JSON.stringify(d.error)));
   return d.content.map(b=>b.text||'').join('');
 }
 
@@ -420,27 +429,91 @@ function safeJSON(raw){
 
 function buildSys(ct,kc,detail,region,year){
   const rL={hn:'Hà Nội & miền Bắc',hcm:'HCM & miền Nam','mien-trung':'Miền Trung','tay-nguyen':'Tây Nguyên'}[region]||region;
-  return `You are a construction cost estimator. Respond ONLY with a single valid JSON object. No markdown, no text before or after, no backticks, no explanation. Only JSON.
+  return `Bạn là kỹ sư dự toán 15 năm kinh nghiệm bóc khối lượng công trình công nghiệp Việt Nam, làm việc theo chuẩn BOQ nội bộ nhà thầu. Trả về DUY NHẤT 1 JSON hợp lệ. Không markdown, không backtick, không text thừa trước/sau JSON.
 
-Context: ${ct}, ${kc}, ${detail}, ${rL}, year ${year}
-Unit prices (VND): Steel VL 22000-28000/kg NC 2500-3500/kg; Concrete M300 VL 1350000-1500000/m3 NC 350000-450000/m3; Roof sheet VL 180000-250000/m2 NC 45000-65000/m2; Floor VL 850000-950000/m3 NC 200000-280000/m3; Pile D400 VL 550000-700000/m NC 180000-250000/m.
+NGUYÊN TẮC QUAN TRỌNG NHẤT:
+1. CHỈ trích xuất số lượng và kích thước từ bản vẽ/mô tả. TUYỆT ĐỐI KHÔNG tự nhân chia tính khối lượng — hệ thống sẽ tự tính q×D×R×C×h.
+2. Mỗi cấu kiện là 1 dòng diễn giải, tên đúng ký hiệu trên bản vẽ (Móng F1, Móng F2A, Dầm DG-1 (350x400), Cột C1...): q=số lượng cấu kiện, D=dài(m), R=rộng(m), C=cao/dày(m), h=hệ số (nếu có). Chiều nào không dùng thì BỎ HẲN key đó (hệ thống coi =1). Khối lượng trừ đi (bê tông chiếm chỗ khi lấp đất) dùng q âm: {"n":"Trừ BT chiếm chỗ","q":-1,"D":60.25}.
+3. Cốt thép: đơn vị "kg". Mỗi dòng = 1 đường kính của 1 loại cấu kiện: {"n":"Móng F1 - Phi 16","q":10,"D":78.92} nghĩa là 10 móng × 78.92 kg/móng. Cuối mỗi công tác thép thêm dòng {"n":"Kẽm buộc 1.5%","q":1,"D":<tổng kg thép×0.015>}.
+4. Bê tông tách công tác riêng: "Bê tông lót đá 1x2 M100" (thường dày 0.1m dưới móng, 0.05m dưới dầm/vách) và "Bê tông đá 1x2 M250R28" theo từng nhóm cấu kiện (móng, cổ cột, dầm, sàn, vách).
+5. Nếu bản vẽ có bảng thống kê (thép, cấu kiện) thì ƯU TIÊN lấy số liệu từ bảng thay vì đo hình.
+6. Đào đất móng: kích thước hố đào = kích thước móng + mở rộng thi công mỗi bên 0.3-0.5m, sâu = độ sâu chôn móng. Lấp đất = đất đào trừ bê tông chiếm chỗ.
 
-Required JSON format:
-{"summary":[{"label":"Tổng diện tích","value":"7200","unit":"m²"},{"label":"KL thép","value":"85","unit":"tấn"},{"label":"KL bê tông","value":"320","unit":"m³"},{"label":"Số hạng mục","value":"12","unit":"hạng mục"}],"totalVL":1200000000,"totalNC":180000000,"totalCost":1380000000,"items":[{"name":"Móng cọc BTCT D400","category":"Nền móng","spec":"D400 sâu 12m","quantity":"48","unit":"m","priceVL":625000,"priceNC":215000,"total":40320000,"confidence":"82"}],"notes":"Ghi chú kỹ thuật"}
+THỨ TỰ HẠNG MỤC CHUẨN (đánh số La Mã, chỉ đưa vào hạng mục có trong công trình): I. Vận chuyển đất; II. Đào, lấp đất móng - nền; III. Ban gạt, lu lèn nền đất; IV. Ban gạt, lu lèn nền đá base 0x4; V. Nilong chống mất nước; VI. Bê tông; VII. Cấu kiện đúc sẵn (tấm đan...); VIII. Ván khuôn; IX. Cốt thép; X. Thép lưới hàn; XI. Kết cấu thép (cột, kèo); XII. Mái - xà gồ; XIII. Tường bao - panel; XIV. Nền, hoàn thiện (xoa nền, cắt ron, sika); XV. Công tác khác.
 
-Include items for: móng cọc, đài móng, cột thép, kèo thép, xà gồ mái, xà gồ tường, mái tôn, tường bao, nền BTCT, cửa chính. Maximum 10 items total. Keep notes under 100 characters.`;
+Bối cảnh: ${ct}, kết cấu ${kc}, độ chi tiết ${detail}, khu vực ${rL}, năm ${year}.
+Đơn giá tham khảo VND (điều chỉnh theo khu vực/năm): Đào đất NC 78.000/m3; Lấp đất NC 80.500/m3; Vận chuyển đất NC 155.250/m3; Lu lèn nền đất NC 28.800/m2; Đá base 0x4 VT 857.000 + NC 135.700/m3; BT lót M100 VT 1.513.000 + NC 345.000/m3; BT M250 VT 1.678.000 + NC 287.500/m3; Ván khuôn VT 50.000 + NC 110.000/m2; Cốt thép VT 17.975 + NC 5.520/kg; Thép lưới hàn VT 19.500 + NC 3.200/kg; Thép hình tổ hợp VT 25.000 + NC 3.000/kg; Tôn mái VT 215.000 + NC 55.000/m2; Panel cách nhiệt VT 550.000 + NC 85.000/m2; Sika grout chân cột VT 95.000 + NC 35.000/bộ.
+
+JSON FORMAT (mẫu):
+{"project":"KHO SẤY CỎ TÂY NINH","cats":[{"r":"II","n":"Đào, lấp đất móng - nền xưởng","tasks":[{"n":"Đào đất","u":"m3","pv":0,"pn":78000,"cf":85,"grp":[{"n":"Móng, đà kiềng","d":[{"n":"Móng F1","q":10,"D":2.8,"R":2.4,"C":1.9},{"n":"Dầm DG-1 (350x400)","q":6,"D":24.15,"R":0.85,"C":0.45}]}]}]}],"notes":"Giả định & lưu ý quan trọng, dưới 250 ký tự"}
+
+Ý nghĩa key: r=số La Mã hạng mục, n=tên, u=đơn vị (m3/m2/m/kg/tấn/cái/bộ), pv=đơn giá vật tư VND, pn=đơn giá nhân công VND, cf=độ tin cậy %, grp=nhóm, d=dòng diễn giải.
+Giới hạn để JSON gọn: tối đa 12 hạng mục; mỗi công tác tối đa 3 nhóm; mỗi nhóm tối đa 12 dòng diễn giải. Ưu tiên đầy đủ hạng mục hơn là quá chi tiết 1 hạng mục.`;
 }
 
 function sPS(id,st){const e=document.getElementById(id);if(!e)return;e.classList.remove('act','don');e.classList.add(st);}
 async function animP(ids,dur){const d=dur/ids.length;for(let i=0;i<ids.length;i++){if(i>0)sPS(ids[i-1],'don');sPS(ids[i],'act');await new Promise(r=>setTimeout(r,d));}}
 function fmt3(n){return Number(n||0).toLocaleString('vi-VN');}
+function num(x,d){const v=parseFloat(x);return isNaN(v)?d:v;}
+function fmtKL(v){return Number(v||0).toLocaleString('vi-VN',{minimumFractionDigits:0,maximumFractionDigits:2});}
 
-const CATS={'Kết cấu thép':'ck','Bê tông':'cb','Hoàn thiện':'ch','Nền móng':'cn','Mái':'cm','Khác':'cx'};
-function render(data,sg,tb,nb,cb){
-  document.getElementById(sg).innerHTML=(data.summary||[]).map(s=>`<div class="sumcard"><div class="sumlbl">${s.label}</div><div class="sumval">${s.value}</div><div class="sumunit">${s.unit}</div></div>`).join('');
-  const tvl=data.totalVL||0,tnc=data.totalNC||0,tot=data.totalCost||tvl+tnc;
-  document.getElementById(cb).innerHTML=`<div><div class="cost-lbl">Tổng dự toán sơ bộ</div><div class="cost-val">${fmt3(tot)} đ</div><div class="cost-note">Chưa bao gồm VAT và chi phí khác</div></div><div class="cost-breakdown"><div class="cbd"><div class="cbd-lbl">Vật liệu</div><div class="cbd-val vl">${fmt3(tvl)} đ</div></div><div class="cbd"><div class="cbd-lbl">Nhân công</div><div class="cbd-val nc">${fmt3(tnc)} đ</div></div><div class="cbd"><div class="cbd-lbl">Tỷ lệ NC/VL</div><div class="cbd-val" style="color:var(--muted)">${tvl?((tnc/tvl)*100).toFixed(0):'—'}%</div></div></div>`;
-  document.getElementById(tb).innerHTML=(data.items||[]).map((it,i)=>{const cc=CATS[it.category]||'cx';const c=parseFloat(it.confidence)||80;const cf=c>=85?'':c>=70?'m':'l';return `<tr><td style="font-family:var(--mono);font-size:11px;color:var(--muted)">${String(i+1).padStart(2,'0')}</td><td style="font-weight:600">${it.name}</td><td><span class="cat ${cc}">${it.category}</span></td><td style="font-family:var(--mono);font-size:11px;color:#90a890">${it.spec||'—'}</td><td style="font-family:var(--display);font-size:18px;color:var(--green)">${it.quantity}</td><td style="font-family:var(--mono);font-size:11px;color:var(--muted)">${it.unit}</td><td style="font-family:var(--mono);font-size:11px;color:var(--yellow)">${it.priceVL?fmt3(it.priceVL):'—'}</td><td style="font-family:var(--mono);font-size:11px;color:var(--yellow)">${it.priceNC?fmt3(it.priceNC):'—'}</td><td style="font-family:var(--mono);font-size:12px;color:var(--blue);font-weight:600">${it.total?fmt3(it.total):'—'}</td><td><div class="cbar"><div class="ctrack"><div class="cfill ${cf}" style="width:${c}%"></div></div><div class="cnum">${c}%</div></div></td></tr>`;}).join('');
+// ── ENGINE TÍNH KHỐI LƯỢNG (JS tính, không tin số AI) ─
+function computeBOQ(data){
+  let gv=0,gn=0,nTask=0,concrete=0,steel=0;
+  (data.cats||[]).forEach(cat=>{
+    cat._tt=0;
+    (cat.tasks||[]).forEach(t=>{
+      let kl=0;
+      (t.grp||[]).forEach(g=>{
+        g._kl=0;
+        (g.d||[]).forEach(dt=>{
+          dt._kl=num(dt.q,1)*num(dt.D,1)*num(dt.R,1)*num(dt.C,1)*num(dt.h,1);
+          g._kl+=dt._kl;
+        });
+        kl+=g._kl;
+      });
+      t._kl=kl;
+      t._tv=kl*num(t.pv,0);t._tn=kl*num(t.pn,0);t._tt=t._tv+t._tn;
+      cat._tt+=t._tt;gv+=t._tv;gn+=t._tn;nTask++;
+      const u=(t.u||'').toLowerCase();
+      if(/m3|m³/.test(u)&&/bê tông|be tong/i.test(t.n))concrete+=kl;
+      if(u==='kg')steel+=kl;if(/tấn|tan/.test(u))steel+=kl*1000;
+    });
+  });
+  data._tv=gv;data._tn=gn;data._tt=gv+gn;data._vat=(gv+gn)*0.08;
+  data._nCat=(data.cats||[]).length;data._nTask=nTask;data._concrete=concrete;data._steel=steel;
+  return data;
+}
+
+let lastData={1:null,2:null};
+
+function render(data,sg,tb,nb,cb,slot){
+  computeBOQ(data);lastData[slot]=data;
+  document.getElementById(sg).innerHTML=[
+    {label:'Hạng mục',value:data._nCat,unit:'mục'},
+    {label:'Công tác',value:data._nTask,unit:'công tác'},
+    {label:'KL bê tông',value:fmtKL(data._concrete),unit:'m³'},
+    {label:'KL cốt thép',value:fmtKL(data._steel/1000),unit:'tấn'}
+  ].map(s=>`<div class="sumcard"><div class="sumlbl">${s.label}</div><div class="sumval">${s.value}</div><div class="sumunit">${s.unit}</div></div>`).join('');
+  document.getElementById(cb).innerHTML=`<div><div class="cost-lbl">Tổng dự toán trước thuế</div><div class="cost-val">${fmt3(Math.round(data._tt))} đ</div><div class="cost-note">VAT 8%: ${fmt3(Math.round(data._vat))} đ — Sau thuế: ${fmt3(Math.round(data._tt+data._vat))} đ</div></div><div class="cost-breakdown"><div class="cbd"><div class="cbd-lbl">Vật tư</div><div class="cbd-val vl">${fmt3(Math.round(data._tv))} đ</div></div><div class="cbd"><div class="cbd-lbl">Nhân công</div><div class="cbd-val nc">${fmt3(Math.round(data._tn))} đ</div></div><div class="cbd"><div class="cbd-lbl">Tỷ lệ NC/VL</div><div class="cbd-val" style="color:var(--muted)">${data._tv?((data._tn/data._tv)*100).toFixed(0):'—'}%</div></div></div>`;
+  let html='';
+  (data.cats||[]).forEach(cat=>{
+    html+=`<tr class="r-cat"><td>${cat.r||''}</td><td colspan="7">${cat.n||''}</td><td></td><td></td><td></td><td class="money">${fmt3(Math.round(cat._tt))}</td></tr>`;
+    (cat.tasks||[]).forEach((t,ti)=>{
+      const c=parseFloat(t.cf)||80;const cfc=c>=85?'var(--green)':c>=70?'var(--yellow)':'var(--red)';
+      html+=`<tr class="r-task"><td>${ti+1}</td><td>${t.n||''} <span style="font-size:10px;color:${cfc}">●${c}%</span></td><td>${t.u||''}</td><td></td><td></td><td></td><td></td><td></td><td class="kl">${fmtKL(t._kl)}</td><td class="money">${t.pv?fmt3(t.pv):'—'}</td><td class="money">${t.pn?fmt3(t.pn):'—'}</td><td class="money" style="color:var(--blue);font-weight:600">${fmt3(Math.round(t._tt))}</td></tr>`;
+      (t.grp||[]).forEach(g=>{
+        html+=`<tr class="r-grp"><td></td><td colspan="7" style="padding-left:18px;font-style:italic">${g.n||''}</td><td class="kl" style="font-style:italic">${fmtKL(g._kl)}</td><td></td><td></td><td></td></tr>`;
+        (g.d||[]).forEach(dt=>{
+          html+=`<tr class="r-det"><td></td><td style="padding-left:34px">${dt.n||''}</td><td></td><td>${dt.q!==undefined?dt.q:''}</td><td>${dt.D!==undefined?dt.D:''}</td><td>${dt.R!==undefined?dt.R:''}</td><td>${dt.C!==undefined?dt.C:''}</td><td>${dt.h!==undefined?dt.h:''}</td><td class="kl">${fmtKL(dt._kl)}</td><td></td><td></td><td></td></tr>`;
+        });
+      });
+    });
+  });
+  html+=`<tr class="r-cat"><td></td><td colspan="7">TỔNG CỘNG TRƯỚC THUẾ</td><td></td><td></td><td></td><td class="money">${fmt3(Math.round(data._tt))}</td></tr>`;
+  html+=`<tr class="r-grp"><td></td><td colspan="7">THUẾ VAT 8%</td><td></td><td></td><td></td><td class="money">${fmt3(Math.round(data._vat))}</td></tr>`;
+  html+=`<tr class="r-cat"><td></td><td colspan="7">TỔNG CỘNG SAU THUẾ</td><td></td><td></td><td></td><td class="money">${fmt3(Math.round(data._tt+data._vat))}</td></tr>`;
+  document.getElementById(tb).innerHTML=html;
   document.getElementById(nb).textContent=data.notes||'';
 }
 
@@ -448,13 +521,13 @@ async function run1(){
   if(!await chkLim())return;
   const btn=document.getElementById('btn1');document.getElementById('err1').classList.remove('on');
   const ct=document.getElementById('ct').value,kc=document.getElementById('kc').value,detail=document.getElementById('detail').value,region=document.getElementById('region').value,year=document.getElementById('year').value;
-  let content;
-  if(uB&&uT&&uT.startsWith('image/')){content=[{type:'image',source:{type:'base64',media_type:uT,data:uB}},{type:'text',text:'Phân tích bản vẽ và bóc khối lượng đầy đủ kèm dự toán.'}];}
-  else if(uF){content=`File: ${uF.name}. Bóc KL và dự toán điển hình.`;}
-  else{content=`Bóc KL + dự toán điển hình: ${ct}, kết cấu ${kc}, 60x120m cao 9m.`;}
+  let content,model;
+  if(uB&&uT&&uT.startsWith('image/')){content=[{type:'image',source:{type:'base64',media_type:uT,data:uB}},{type:'text',text:'Phân tích kỹ bản vẽ này. Đọc bảng thống kê nếu có. Trích xuất số lượng + kích thước từng cấu kiện theo đúng ký hiệu bản vẽ và bóc khối lượng theo format yêu cầu.'}];model='claude-sonnet-4-5';}
+  else if(uB&&uT==='application/pdf'){content=[{type:'document',source:{type:'base64',media_type:'application/pdf',data:uB}},{type:'text',text:'Phân tích kỹ bản vẽ PDF này. Đọc bảng thống kê nếu có. Trích xuất số lượng + kích thước từng cấu kiện theo đúng ký hiệu bản vẽ và bóc khối lượng theo format yêu cầu.'}];model='claude-sonnet-4-5';}
+  else{content=`Bóc KL điển hình: ${ct}, kết cấu ${kc}, 60x120m cao 9m.`;model='claude-haiku-4-5-20251001';}
   btn.disabled=true;document.getElementById('prog1').classList.add('on');document.getElementById('res1').classList.remove('on');
-  const ids=['s1','s2','s3','s4','s5','s6'];const pp=animP(ids,5000);
-  try{const raw=await callAI(buildSys(ct,kc,detail,region,year),content);await pp;ids.forEach(id=>sPS(id,'don'));const data=safeJSON(raw);render(data,'sg1','tb1','nb1','cb1');document.getElementById('res1').classList.add('on');await incUse();}
+  const ids=['s1','s2','s3','s4','s5','s6'];const pp=animP(ids,8000);
+  try{const raw=await callAI(buildSys(ct,kc,detail,region,year),content,model);await pp;ids.forEach(id=>sPS(id,'don'));const data=safeJSON(raw);render(data,'sg1','tb1','nb1','cb1',1);document.getElementById('res1').classList.add('on');await incUse();}
   catch(e){await pp;const err=document.getElementById('err1');err.textContent='❌ '+(e.message||'Lỗi API.');err.classList.add('on');}
   btn.disabled=false;
 }
@@ -465,14 +538,87 @@ async function run2(){
   const btn=document.getElementById('btn2');document.getElementById('err2').classList.remove('on');
   const ct=document.getElementById('m-ct').value,kc=document.getElementById('m-kc').value,detail=document.getElementById('m-detail').value,region=document.getElementById('m-region').value,year=document.getElementById('m-year').value;
   btn.disabled=true;document.getElementById('prog2').classList.add('on');document.getElementById('res2').classList.remove('on');
-  const ids=['ms1','ms2','ms3','ms4','ms5'];const pp=animP(ids,4500);
-  try{const raw=await callAI(buildSys(ct,kc,detail,region,year),desc);await pp;ids.forEach(id=>sPS(id,'don'));const data=safeJSON(raw);render(data,'sg2','tb2','nb2','cb2');document.getElementById('res2').classList.add('on');await incUse();}
+  const ids=['ms1','ms2','ms3','ms4','ms5'];const pp=animP(ids,6000);
+  try{const raw=await callAI(buildSys(ct,kc,detail,region,year),desc,'claude-haiku-4-5-20251001');await pp;ids.forEach(id=>sPS(id,'don'));const data=safeJSON(raw);render(data,'sg2','tb2','nb2','cb2',2);document.getElementById('res2').classList.add('on');await incUse();}
   catch(e){await pp;const err=document.getElementById('err2');err.textContent='❌ '+(e.message||'Lỗi API.');err.classList.add('on');}
   btn.disabled=false;
 }
 
 function cpTbl(id){const t=document.getElementById(id);if(!t)return;const rows=t.closest('table').querySelectorAll('tr');const txt=Array.from(rows).map(r=>Array.from(r.querySelectorAll('th,td')).map(c=>c.innerText.trim()).join('\t')).join('\n');navigator.clipboard.writeText(txt).then(()=>alert('✓ Đã copy! Paste vào Excel nhé.'));}
-function exXL(n){const tbody=document.getElementById('tb'+n);if(!tbody||!tbody.children.length){alert('Chưa có dữ liệu!');return;}const hd=['STT','Hạng mục','Danh mục','Thông số KT','Khối lượng','ĐV','Đ.giá VL','Đ.giá NC','Thành tiền','Tin cậy'];const rows=Array.from(tbody.querySelectorAll('tr')).map(r=>Array.from(r.querySelectorAll('td')).map((td,i)=>{const c=td.querySelector('.cnum');return c?c.innerText:td.innerText.trim();}));const csv=[hd,...rows].map(r=>r.map(c=>`"${c}"`).join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'}));a.download='StructAI-DuToan-'+new Date().toLocaleDateString('vi').replace(/\//g,'-')+'.csv';a.click();}
+
+// ── XUẤT EXCEL .XLSX CHUẨN BOQ ───────────────────────
+function exXL(n){
+  const data=lastData[n];
+  if(!data){alert('Chưa có dữ liệu!');return;}
+  if(typeof XLSX==='undefined'){alert('Thư viện Excel đang tải, thử lại sau vài giây.');return;}
+  const aoa=[],merges=[],fm={};
+  aoa.push(['BOQ — '+(data.project||'CÔNG TRÌNH')]);merges.push({s:{r:0,c:0},e:{r:0,c:15}});
+  aoa.push([]);
+  aoa.push(['STT','TÊN CÔNG TÁC','ĐƠN VỊ','SỐ LƯỢNG','KHỐI LƯỢNG','','','HỆ SỐ','KL CHI TIẾT','KL TỔNG','ĐƠN GIÁ','','TỔNG ĐƠN GIÁ','THÀNH TIỀN','','TỔNG THÀNH TIỀN']);
+  aoa.push(['','','','','D','R','C','','','','VẬT TƯ','NHÂN CÔNG','','VẬT TƯ','NHÂN CÔNG','']);
+  merges.push({s:{r:2,c:4},e:{r:2,c:6}},{s:{r:2,c:10},e:{r:2,c:11}},{s:{r:2,c:13},e:{r:2,c:14}});
+  [0,1,2,3,7,8,9,12,15].forEach(c=>merges.push({s:{r:2,c:c},e:{r:3,c:c}}));
+  const catRows=[];
+  (data.cats||[]).forEach(cat=>{
+    const cr=aoa.length;catRows.push(cr);
+    aoa.push([cat.r||'',cat.n||'']);
+    const taskPs=[];
+    (cat.tasks||[]).forEach((t,ti)=>{
+      const tr=aoa.length;
+      const row=[ti+1,t.n||'',t.u||''];row[10]=num(t.pv,0);row[11]=num(t.pn,0);
+      aoa.push(row);
+      const grpJs=[];
+      (t.grp||[]).forEach(g=>{
+        const gr=aoa.length;
+        aoa.push(['',g.n||'']);
+        const dRows=[];
+        (t.grp.length||1)&&(g.d||[]).forEach(dt=>{
+          const dr=aoa.length;dRows.push(dr);
+          const drow=['',dt.n||'','',num(dt.q,1)];
+          if(dt.D!==undefined)drow[4]=num(dt.D,1);
+          if(dt.R!==undefined)drow[5]=num(dt.R,1);
+          if(dt.C!==undefined)drow[6]=num(dt.C,1);
+          if(dt.h!==undefined)drow[7]=num(dt.h,1);
+          drow[8]=0;
+          aoa.push(drow);
+          fm[dr+',8']='PRODUCT(D'+(dr+1)+':H'+(dr+1)+')';
+        });
+        if(dRows.length){fm[gr+',9']='SUM(I'+(dRows[0]+1)+':I'+(dRows[dRows.length-1]+1)+')';grpJs.push(gr);}
+      });
+      if(grpJs.length)fm[tr+',9']=grpJs.map(r=>'J'+(r+1)).join('+');
+      fm[tr+',12']='K'+(tr+1)+'+L'+(tr+1);
+      fm[tr+',13']='J'+(tr+1)+'*K'+(tr+1);
+      fm[tr+',14']='J'+(tr+1)+'*L'+(tr+1);
+      fm[tr+',15']='N'+(tr+1)+'+O'+(tr+1);
+      taskPs.push(tr);
+    });
+    if(taskPs.length)fm[cr+',15']=taskPs.map(r=>'P'+(r+1)).join('+');
+  });
+  const totR=aoa.length;aoa.push(['','TỔNG CỘNG TRƯỚC THUẾ']);
+  fm[totR+',15']=catRows.length?catRows.map(r=>'P'+(r+1)).join('+'):'0';
+  const vatR=aoa.length;aoa.push(['','THUẾ VAT 8%']);fm[vatR+',15']='P'+(totR+1)+'*0.08';
+  const atR=aoa.length;aoa.push(['','TỔNG CỘNG SAU THUẾ']);fm[atR+',15']='P'+(totR+1)+'+P'+(vatR+1);
+  if(data.notes){aoa.push([]);aoa.push(['','GHI CHÚ: '+data.notes]);}
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  Object.keys(fm).forEach(k=>{const p=k.split(',');const ref=XLSX.utils.encode_cell({r:+p[0],c:+p[1]});if(!ws[ref])ws[ref]={t:'n',v:0};ws[ref].f=fm[k];});
+  ws['!merges']=merges;
+  ws['!cols']=[{wch:5},{wch:44},{wch:8},{wch:9},{wch:7},{wch:7},{wch:7},{wch:7},{wch:12},{wch:12},{wch:12},{wch:12},{wch:13},{wch:15},{wch:14},{wch:17}];
+  for(let R=4;R<aoa.length;R++){for(let C=3;C<=15;C++){const ref=XLSX.utils.encode_cell({r:R,c:C});if(ws[ref]&&(ws[ref].t==='n'||ws[ref].f))ws[ref].z=C<=9?'#,##0.00':'#,##0';}}
+  const th=[['BẢNG TỔNG HỢP — '+(data.project||'CÔNG TRÌNH')],[],['STT','TÊN CÔNG TÁC','GIÁ TRỊ (VND)']];
+  const thFm={};
+  (data.cats||[]).forEach((cat,i)=>{const r=th.length;th.push([cat.r||'',cat.n||'']);thFm[r+',2']="'BOQ CHI TIET'!P"+(catRows[i]+1);});
+  const t1=th.length;th.push(['','TỔNG CỘNG TRƯỚC THUẾ']);thFm[t1+',2']="'BOQ CHI TIET'!P"+(totR+1);
+  const t2=th.length;th.push(['','THUẾ VAT 8%']);thFm[t2+',2']="'BOQ CHI TIET'!P"+(vatR+1);
+  const t3=th.length;th.push(['','TỔNG CỘNG SAU THUẾ']);thFm[t3+',2']="'BOQ CHI TIET'!P"+(atR+1);
+  const ws2=XLSX.utils.aoa_to_sheet(th);
+  Object.keys(thFm).forEach(k=>{const p=k.split(',');const ref=XLSX.utils.encode_cell({r:+p[0],c:+p[1]});if(!ws2[ref])ws2[ref]={t:'n',v:0};ws2[ref].f=thFm[k];ws2[ref].z='#,##0';});
+  ws2['!cols']=[{wch:5},{wch:44},{wch:18}];
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws2,'TONG HOP');
+  XLSX.utils.book_append_sheet(wb,ws,'BOQ CHI TIET');
+  XLSX.writeFile(wb,'StructAI-BOQ-'+new Date().toLocaleDateString('vi').replace(/\//g,'-')+'.xlsx');
+}
+
 </script>
 
 
